@@ -1,0 +1,21 @@
+{
+  "id": "collisionmasktest-b935a038",
+  "title": "CollisionMaskTest",
+  "author": "Panic, Inc.",
+  "description": "Demonstration of sprite layers and collision masks.",
+  "version": "",
+  "bundleID": "com.panic.collisionMaskTest",
+  "createdAt": "2026-10-21T12:19:13.458Z",
+  "sizeBytes": 27525,
+  "fileCount": 7,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "name": "CollisionMaskTest",
+    "author": "Panic, Inc.",
+    "description": "Demonstration of sprite layers and collision masks.",
+    "bundleID": "com.panic.collisionMaskTest",
+    "imagePath": "card.png",
+    "pdxversion": "30101",
+    "buildtime": "845900353"
+  }
+}

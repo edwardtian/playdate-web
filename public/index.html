@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Playdate Web Simulator</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◐</span>
+      <div>
+        <h1>Playdate Web Simulator</h1>
+        <p class="tagline">Upload a compiled <code>.pdx</code> bundle, then play it in the official simulator — right in your browser.</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button id="btnUpload" class="btn btn-primary">Upload a game</button>
+      <button id="btnRefresh" class="btn btn-ghost">Refresh library</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="library-panel">
+      <h2>Game library</h2>
+      <p class="hint">Each uploaded bundle runs in its own isolated simulator session.</p>
+      <ul id="gameList" class="game-list"></ul>
+      <div id="libraryEmpty" class="empty-state">No games yet. Upload a <code>.pdx.zip</code> or a folder containing a compiled bundle.</div>
+    </section>
+
+    <section class="player-panel">
+      <div class="player-header">
+        <h2 id="playerTitle">Player</h2>
+        <span id="sessionState" class="pill">idle</span>
+        <button id="btnShare" class="btn btn-ghost" disabled>Copy share link</button>
+        <button id="btnStop" class="btn btn-ghost" disabled>Stop session</button>
+      </div>
+
+      <div class="device-stage">
+        <div class="screen-shell">
+          <div class="screen">
+            <img id="screenImg" alt="Playdate screen" />
+            <div id="screenPlaceholder" class="screen-placeholder">
+              <p>Pick a game and press <strong>Play</strong>.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="side-controls">
+          <button class="menu-btn" id="btnMenu" title="Menu">MENU</button>
+          <div class="dial">
+            <input id="dialAngle" type="range" min="0" max="359" value="0" step="1" class="dial-range" />
+            <div class="dial-readout"><span id="dialValue">0°</span></div>
+          </div>
+          <label class="dock-toggle">
+            <input id="dockToggle" type="checkbox" checked />
+            <span>Docked</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="controller">
+        <div class="dpad">
+          <button class="pad up" data-button="up">▲</button>
+          <button class="pad left" data-button="left">◀</button>
+          <button class="pad right" data-button="right">▶</button>
+          <button class="pad down" data-button="down">▼</button>
+        </div>
+        <div class="face-buttons">
+          <button class="btn-round" data-button="B"><span>B</span><small>A</small></button>
+          <button class="btn-round" data-button="A"><span>A</span><small>S</small></button>
+        </div>
+      </div>
+
+      <div class="keyboard-hint">
+        <p><strong>Keyboard:</strong> arrows = D-pad, <kbd>S</kbd> = A button, <kbd>A</kbd> = B button.
+        <strong>Crank:</strong> mouse wheel over the screen, or drag the dial.</p>
+      </div>
+
+      <div class="console-log">
+        <div class="log-header">Simulator console</div>
+        <pre id="logOutput"></pre>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="uploadDialog" class="upload-dialog">
+    <form method="dialog" id="uploadForm">
+      <h3>Upload a Playdate game</h3>
+      <p class="hint">A compiled bundle must contain <code>pdxinfo</code> and <code>main.pdz</code>. Build it with <code>pdc</code> first.</p>
+
+      <div class="upload-row">
+        <label class="file-label">
+          <span>Choose <code>.zip</code> file</span>
+          <input id="zipFileInput" type="file" accept=".zip,application/zip" />
+        </label>
+      </div>
+
+      <div class="upload-row">
+        <label class="file-label">
+          <span>…or choose a folder (we zip it in your browser)</span>
+          <input id="folderInput" type="file" webkitdirectory directory multiple />
+        </label>
+      </div>
+
+      <div class="upload-status" id="uploadStatus"></div>
+
+      <div class="dialog-actions">
+        <button type="button" id="btnCancelUpload" class="btn btn-ghost">Cancel</button>
+        <button type="button" id="btnDoUpload" class="btn btn-primary" disabled>Upload &amp; register</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/zip.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "id": "drummachine-b2775e57",
+  "title": "DrumMachine",
+  "author": "Unknown",
+  "description": "",
+  "version": "",
+  "bundleID": "",
+  "createdAt": "2026-10-21T12:21:32.406Z",
+  "sizeBytes": 1005253,
+  "fileCount": 17,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "pdxversion": "30101",
+    "buildtime": "845900492"
+  }
+}

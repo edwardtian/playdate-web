@@ -1,0 +1,16 @@
+{
+  "id": "hammer-down-34bb1588",
+  "title": "Hammer Down",
+  "author": "Unknown",
+  "description": "",
+  "version": "",
+  "bundleID": "",
+  "createdAt": "2026-10-21T12:21:32.305Z",
+  "sizeBytes": 21837,
+  "fileCount": 106,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "pdxversion": "30101",
+    "buildtime": "845900492"
+  }
+}

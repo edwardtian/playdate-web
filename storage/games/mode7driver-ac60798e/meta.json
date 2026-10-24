@@ -1,0 +1,16 @@
+{
+  "id": "mode7driver-ac60798e",
+  "title": "Mode7Driver",
+  "author": "Unknown",
+  "description": "",
+  "version": "",
+  "bundleID": "",
+  "createdAt": "2026-10-21T12:21:32.392Z",
+  "sizeBytes": 3646,
+  "fileCount": 2,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "pdxversion": "30101",
+    "buildtime": "845900492"
+  }
+}

@@ -1,0 +1,7 @@
+storage/games/*/game.pdx/
+storage/sessions/
+storage/tmp/
+vendor/
+node_modules/
+.tmp*/
+*.log

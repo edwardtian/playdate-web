@@ -1,0 +1,21 @@
+{
+  "id": "pathfinder-a7e49a60",
+  "title": "Pathfinder",
+  "author": "Panic, Inc.",
+  "description": "Pathfinding Demo.",
+  "version": "",
+  "bundleID": "com.panic.pathfinder",
+  "createdAt": "2026-10-21T12:19:13.586Z",
+  "sizeBytes": 11179,
+  "fileCount": 3,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "name": "Pathfinder",
+    "author": "Panic, Inc.",
+    "description": "Pathfinding Demo.",
+    "bundleID": "com.panic.pathfinder",
+    "imagePath": "card",
+    "pdxversion": "30101",
+    "buildtime": "845900353"
+  }
+}

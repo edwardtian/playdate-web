@@ -1,0 +1,23 @@
+{
+  "id": "flippy-fish-338d5955",
+  "title": "Flippy Fish",
+  "author": "Panic Inc.",
+  "description": "A spritely little fish",
+  "version": "0.1",
+  "bundleID": "com.panic.flippyfish",
+  "createdAt": "2026-10-21T12:19:13.440Z",
+  "sizeBytes": 42613,
+  "fileCount": 30,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "name": "Flippy Fish",
+    "author": "Panic Inc.",
+    "description": "A spritely little fish",
+    "bundleID": "com.panic.flippyfish",
+    "version": "0.1",
+    "buildNumber": "100",
+    "imagePath": "SystemAssets",
+    "pdxversion": "30101",
+    "buildtime": "845900353"
+  }
+}

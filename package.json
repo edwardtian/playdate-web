@@ -1,0 +1,17 @@
+{
+  "name": "playdate-web-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Upload compiled Playdate .pdx bundles and play them in the official Playdate Simulator, streamed to the browser.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "seed": "node scripts/seed.js",
+    "setup:x11": "bash scripts/setup-x11.sh",
+    "test": "node scripts/smoke-test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

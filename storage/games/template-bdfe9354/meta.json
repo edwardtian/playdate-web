@@ -1,0 +1,23 @@
+{
+  "id": "template-bdfe9354",
+  "title": "Template",
+  "author": "You, Inc.",
+  "description": "A basic game template.",
+  "version": "1.0",
+  "bundleID": "com.yourcompany.TemplateGame",
+  "createdAt": "2026-10-21T12:19:13.622Z",
+  "sizeBytes": 611,
+  "fileCount": 4,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "name": "Template",
+    "author": "You, Inc.",
+    "description": "A basic game template.",
+    "bundleID": "com.yourcompany.TemplateGame",
+    "version": "1.0",
+    "buildNumber": "100",
+    "imagePath": "SystemAssets",
+    "pdxversion": "30101",
+    "buildtime": "845900353"
+  }
+}

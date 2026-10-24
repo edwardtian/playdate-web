@@ -1,0 +1,24 @@
+{
+  "id": "level-1-1-c6022047",
+  "title": "Level 1-1",
+  "author": "Panic Inc.",
+  "description": "A simple \"Level 1-1\" demo, using sprite and collision libraries.",
+  "version": "0.1",
+  "bundleID": "com.panic.smbc",
+  "createdAt": "2026-10-21T12:19:13.574Z",
+  "sizeBytes": 5159156,
+  "fileCount": 34,
+  "source": "sdk-example",
+  "pdxinfo": {
+    "name": "Level 1-1",
+    "author": "Panic Inc.",
+    "description": "A simple \"Level 1-1\" demo, using sprite and collision libraries.",
+    "bundleID": "com.panic.smbc",
+    "version": "0.1",
+    "buildNumber": "123",
+    "imagePath": "SystemAssets/",
+    "launchSoundPath": "sfx/jump",
+    "pdxversion": "30101",
+    "buildtime": "845900353"
+  }
+}
