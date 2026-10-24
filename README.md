@@ -4,6 +4,8 @@ A small web application that lets a creator **upload a compiled Playdate `.pdx` 
 
 The browser UI shows the real 400×240 device screen, a working D-pad / A / B controller, a crank dial, and the Menu button. Input is sent to the simulator on the server, which streams its framebuffer back to the browser at ~30 fps.
 
+**Runs on Linux and macOS.** On Linux it uses Xvfb + ffmpeg + xdotool (fully headless). On macOS it uses `screencapture` + `cliclick`/`osascript` (needs a logged-in GUI session). See [docs/DEPLOY-macOS.md](docs/DEPLOY-macOS.md) for the Mac mini deployment guide.
+
 ```
  upload .zip  ──►  storage/games/<id>/game.pdx
                           │
@@ -11,6 +13,10 @@ The browser UI shows the real 400×240 device screen, a working D-pad / A / B co
    Xvfb :95 ──► PlaydateSimulator game.pdx ──► ffmpeg x11grab ──► MJPEG ──► browser <img>
                           ▲
                      xdotool input (keys / mouse wheel / clicks)
+
+   (macOS)      ──► PlaydateSimulator game.pdx ──► screencapture ──► JPEG ──► browser <img>
+                          ▲
+                     cliclick / osascript input
 ```
 
 ## Screenshots
@@ -32,28 +38,41 @@ The Playdate Simulator shipped in the SDK is a **proprietary, stripped ELF** bui
 
 ## Requirements
 
+**Linux:**
 - Linux x86_64 with `apt-get` available (for the X11 helper tools)
 - Node.js ≥ 18 (no npm dependencies — pure standard library)
 - The Playdate SDK (this repo is SDK 3.1.2), with `bin/PlaydateSimulator`, `bin/pdc`
 - `ffmpeg` with `x11grab` support
 - `unzip`/`zip`
 
+**macOS (Apple Silicon / Intel):**
+- macOS 13+ with a **logged-in GUI session** (the simulator is a native GUI app; no headless mode)
+- Node.js ≥ 18 (`brew install node`)
+- The Playdate SDK for macOS (download from https://play.date/dev/)
+- `cliclick` for reliable input (`brew install cliclick`) — falls back to `osascript` keystrokes
+- Built-in tools: `screencapture`, `sips`, `osascript` (no install needed)
+
+## Setup
+
 ## Setup
 
 ```bash
 cd webapp
 
-# 1. Extract Xvfb + xdotool into vendor/x11 without needing root
+# Linux: extract Xvfb + xdotool into vendor/x11 without needing root
 npm run setup:x11          # or bash scripts/setup-x11.sh
 
-# 2. Register SDK example games as playable content (optional but recommended)
+# macOS: check prerequisites and permissions
+npm run setup:macos        # or bash scripts/setup-macos.sh
+
+# Register SDK example games as playable content (optional but recommended)
 npm run seed
 
-# 3. Start the server
+# Start the server
 npm run start              # http://127.0.0.1:4173
 ```
 
-If the SDK lives elsewhere, set `PLAYDATE_SDK_PATH`. If the X11 tools live elsewhere, set `X11_VENDOR_DIR`.
+If the SDK lives elsewhere, set `PLAYDATE_SDK_PATH`. On macOS, if the simulator app is not at `bin/Playdate Simulator.app`, set `PLAYDATE_SIM_APP`. On Linux, if the X11 tools live elsewhere, set `X11_VENDOR_DIR`.
 
 Environment knobs:
 
@@ -62,7 +81,8 @@ Environment knobs:
 | `PORT` | `4173` | HTTP port |
 | `HOST` | `127.0.0.1` | Bind address |
 | `PLAYDATE_SDK_PATH` | workspace root | SDK location |
-| `X11_VENDOR_DIR` | `<workspace>/vendor/x11` | Extracted Xvfb/xdotool |
+| `PLAYDATE_SIM_APP` | `bin/Playdate Simulator.app` | macOS simulator bundle path |
+| `X11_VENDOR_DIR` | `<workspace>/vendor/x11` | (Linux) Extracted Xvfb/xdotool |
 | `MAX_UPLOAD_BYTES` | 64 MiB | Upload cap |
 | `MAX_SESSIONS` | 3 | Concurrent simulator sessions |
 | `SESSION_IDLE_MS` | 10 min | Idle session reaping |
