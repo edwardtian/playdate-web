@@ -110,22 +110,64 @@ function streamFrames(req, res, session) {
     'Connection': 'close',
     'X-Accel-Buffering': 'no',
   });
+  res.socket?.setNoDelay?.(true);
+  res.flushHeaders?.();
 
+  // One write per frame keeps the TCP stream from being split into three
+  // small chunks.  Slow clients get frames dropped rather than growing an
+  // unbounded latency queue.
   const writeFrame = (frame) => {
     if (res.writableEnded) return;
-    if (res.writableLength > 4 * 1024 * 1024) return; // drop frames for slow clients
-    res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`);
-    res.write(frame);
-    res.write('\r\n');
+    if (res.writableLength > 256 * 1024) return;
+    const header = Buffer.from(
+      `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`,
+    );
+    res.write(Buffer.concat([header, frame, Buffer.from('\r\n')]));
   };
 
   const unsubscribe = session.subscribeFrame(writeFrame);
-  req.on('close', () => {
+  const finish = () => {
     unsubscribe();
+    session.off('frameEnd', finish);
     if (!res.writableEnded) res.end();
-  });
+  };
+  session.once('frameEnd', finish);
+  req.on('close', finish);
   // No keep-alive parts: only image frames are written, so browsers never
   // see a non-image multipart part.
+}
+
+function streamAudio(req, res, session) {
+  if (!session.audioAvailable) {
+    return json(res, 404, { error: 'Audio is not available for this session' });
+  }
+  res.writeHead(200, {
+    'Content-Type': 'audio/L16;rate=48000;channels=2',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
+    'Connection': 'close',
+    'X-Accel-Buffering': 'no',
+    'Accept-Ranges': 'none',
+  });
+  res.socket?.setNoDelay?.(true);
+  res.flushHeaders?.();
+
+  const writeAudio = (chunk) => {
+    if (res.writableEnded) return;
+    // Do not let a stalled client build seconds of PCM latency.  Dropping a
+    // chunk is audible, but the alternative is sound that lags behind input.
+    if (res.writableLength > 256 * 1024) return;
+    res.write(chunk);
+  };
+
+  const unsubscribe = session.subscribeAudio(writeAudio);
+  const finish = () => {
+    unsubscribe();
+    session.off('audioEnd', finish);
+    if (!res.writableEnded) res.end();
+  };
+  session.once('audioEnd', finish);
+  req.on('close', finish);
 }
 
 function serveStatic(req, res, urlPath) {
@@ -187,6 +229,8 @@ async function handle(req, res) {
             state: s.state,
             framesUrl: `/api/sessions/${s.id}/frames`,
             inputUrl: `/api/sessions/${s.id}/input`,
+            audioUrl: s.audioAvailable ? `/api/sessions/${s.id}/audio` : null,
+            audio: s.audioAvailable,
           },
         });
       } catch (err) {
@@ -213,7 +257,7 @@ async function handle(req, res) {
     return json(res, 405, { error: 'Method not allowed' });
   }
 
-  const m = pathname.match(/^\/api\/sessions\/([A-Za-z0-9_-]{1,64})(?:\/(frames|input))?$/);
+  const m = pathname.match(/^\/api\/sessions\/([A-Za-z0-9_-]{1,64})(?:\/(frames|input|audio))?$/);
   if (m) {
     const id = m[1];
     const sub = m[2];
@@ -235,12 +279,17 @@ async function handle(req, res) {
           frameCount: session.frameCount,
           docked: session.docked,
           crank: session.crankAngle,
+          audio: session.audioAvailable,
+          audioBytes: session.audioBytes,
           error: session.error,
         },
       });
     }
     if (sub === 'frames' && req.method === 'GET') {
       return streamFrames(req, res, session);
+    }
+    if (sub === 'audio' && req.method === 'GET') {
+      return streamAudio(req, res, session);
     }
     if (sub === 'input' && req.method === 'POST') {
       let payload;

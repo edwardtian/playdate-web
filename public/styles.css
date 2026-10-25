@@ -135,8 +135,14 @@ kbd {
 .player-header {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
+}
+
+#btnSound[data-on="true"] {
+  border-color: rgba(63, 166, 107, 0.55);
+  color: #9de0b8;
 }
 
 .pill {
@@ -173,14 +179,18 @@ kbd {
 .screen {
   position: relative;
   aspect-ratio: 400 / 240;
-  background: #dcd8cf;
-  border: 6px solid var(--ink);
-  border-radius: 10px;
+  background: #000;
+  /* No artificial border here: games draw edge-to-edge content (Turing's
+     leftmost block starts at x=0) and any extra frame reads as part of the
+     game screen. */
+  border: 0;
+  border-radius: 6px;
   overflow: hidden;
 }
 
+.screen canvas,
 .screen img {
-  display: none;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -188,15 +198,22 @@ kbd {
   background: #dcd8cf;
 }
 
+.screen canvas { display: none; }
+.screen img { display: none; }
+
+#gameAudio { display: none; }
+
 .screen-placeholder {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 100%;
   color: #4a463d;
   font-size: 0.9rem;
   text-align: center;
   padding: 12px;
+  background: #dcd8cf;
 }
 
 .side-controls {
@@ -221,10 +238,74 @@ kbd {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
 .menu-btn:hover { background: #ffd45e; }
+.menu-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-.dial { display: flex; flex-direction: column; gap: 6px; align-items: center; width: 100%; }
-.dial-range { width: 100%; accent-color: var(--accent); }
-.dial-readout { color: var(--muted); font-size: 0.75rem; }
+.dial { display: flex; flex-direction: column; gap: 8px; align-items: center; width: 100%; }
+.dial-readout {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 4ch;
+  text-align: center;
+}
+
+/* A real rotary crank.  Drag anywhere on the circle; the angle is unbounded
+   and keeps increasing as you spin past 12 o'clock. */
+.crank-dial {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background:
+    radial-gradient(circle at 50% 45%, #3c3c44 0 38%, #2b2b31 39% 68%, #222227 69% 100%);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), 0 3px 8px rgba(0, 0, 0, 0.3);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+  -webkit-user-select: none;
+}
+.crank-dial::before {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+}
+.crank-dial:focus-visible { box-shadow: 0 0 0 3px rgba(247, 201, 72, 0.45), inset 0 2px 8px rgba(0, 0, 0, 0.55); }
+.crank-dial.dragging { cursor: grabbing; border-color: var(--yellow); }
+
+.crank-pointer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 33px;
+  margin-left: -1.5px;
+  margin-top: -33px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(226, 87, 30, 0.7);
+  transform-origin: 50% 100%;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.crank-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%;
+  background: var(--yellow);
+  border: 2px solid var(--yellow-deep);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
 
 .dock-toggle {
   display: flex;

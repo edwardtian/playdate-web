@@ -231,6 +231,7 @@ class DarwinSession {
     this.capture = new Capture(session);
     this.homeDir = session.homeDir;
     this._cliclick = null;
+    this.crankRemainder = 0;
   }
 
   baseEnv() {
@@ -295,26 +296,33 @@ class DarwinSession {
   }
 
   async crank(delta) {
-    const degrees = Math.max(1, Math.min(90, Math.round(Math.abs(Number(delta) || 4) / 4)));
-    const key = Number(delta) >= 0 ? '[' : ']';
-    if (this._cliclick) {
-      await activateWindow(this.winId).catch(() => {});
-      for (let i = 0; i < degrees; i++) {
-        await exec('cliclick', [`kp:${cliclickKey(key)}`]);
-        await sleep(30);
+    this.crankRemainder += Number(delta) || 0;
+    let steps = Math.trunc(this.crankRemainder / 4);
+    if (!steps) return false;
+    this.crankRemainder -= steps * 4;
+    const key = steps > 0 ? '[' : ']';
+    let remaining = Math.abs(steps);
+    while (remaining > 0) {
+      const n = Math.min(90, remaining);
+      if (this._cliclick) {
+        await activateWindow(this.winId).catch(() => {});
+        // cliclick accepts several space-separated commands in one process.
+        const sequence = Array.from({ length: n }, () => `kp:${cliclickKey(key)}`).join(' ');
+        await exec('cliclick', [sequence]);
+      } else {
+        // Fallback: scroll wheel over the screen.
+        await activateWindow(this.winId).catch(() => {});
+        const r = this.capture.framebufferRect();
+        const cx = r.x + r.w / 2;
+        const cy = r.y + r.h / 2;
+        const dir = steps > 0 ? '+' : '-';
+        for (let i = 0; i < n; i++) {
+          await exec('cliclick', [`m:${cx},${cy}`, `w:${dir}1`]);
+        }
       }
-    } else {
-      // Fallback: scroll wheel over the screen.
-      await activateWindow(this.winId).catch(() => {});
-      const r = this.capture.framebufferRect();
-      const cx = r.x + r.w / 2;
-      const cy = r.y + r.h / 2;
-      const dir = Number(delta) >= 0 ? '4' : '5'; // up/down scroll
-      for (let i = 0; i < degrees; i++) {
-        await exec('cliclick', [`m:${cx},${cy}`, `w:${dir === '4' ? '+' : '-'}1`]);
-        await sleep(30);
-      }
+      remaining -= n;
     }
+    return true;
   }
 
   async setDocked(desired) {

@@ -2,19 +2,21 @@
 
 A small web application that lets a creator **upload a compiled Playdate `.pdx` bundle** and lets **other visitors play it in the official Playdate Simulator** — without installing the SDK or owning a Playdate.
 
-The browser UI shows the real 400×240 device screen, a working D-pad / A / B controller, a crank dial, and the Menu button. Input is sent to the simulator on the server, which streams its framebuffer back to the browser at ~30 fps.
+The browser UI shows the real 400×240 device screen, a working D-pad / A / B controller, a continuously rotatable crank dial, the Menu button, and game audio. Input is sent to the simulator on the server, which streams its framebuffer back to the browser at ~30 fps (decoded on a `<canvas>` with stale-frame dropping) and its audio as a live MP3 stream.
 
-**Runs on Linux and macOS.** On Linux it uses Xvfb + ffmpeg + xdotool (fully headless). On macOS it uses `screencapture` + `cliclick`/`osascript` (needs a logged-in GUI session). See [docs/DEPLOY-macOS.md](docs/DEPLOY-macOS.md) for the Mac mini deployment guide.
+**Runs on Linux and macOS.** On Linux it uses Xvfb + ffmpeg + xdotool (fully headless) and a private PulseAudio null sink per session for audio. On macOS it uses `screencapture` + `cliclick`/`osascript` (needs a logged-in GUI session); audio streaming is Linux-only. See [docs/DEPLOY-macOS.md](docs/DEPLOY-macOS.md) for the Mac mini deployment guide.
 
 ```
  upload .zip  ──►  storage/games/<id>/game.pdx
                           │
                           ▼
-   Xvfb :95 ──► PlaydateSimulator game.pdx ──► ffmpeg x11grab ──► MJPEG ──► browser <img>
+  Xvfb ──► PlaydateSimulator game.pdx ──► ffmpeg x11grab ──► MJPEG ──► browser canvas
+                          │
+                          └──► PulseAudio null sink ──► ffmpeg ──► MP3 ──► browser <audio>
                           ▲
-                     xdotool input (keys / mouse wheel / clicks)
+                     xdotool input (keys / wheel / clicks)
 
-   (macOS)      ──► PlaydateSimulator game.pdx ──► screencapture ──► JPEG ──► browser <img>
+  (macOS)     ──► PlaydateSimulator game.pdx ──► screencapture ──► JPEG ──► browser canvas
                           ▲
                      cliclick / osascript input
 ```
@@ -42,8 +44,9 @@ The Playdate Simulator shipped in the SDK is a **proprietary, stripped ELF** bui
 - Linux x86_64 with `apt-get` available (for the X11 helper tools)
 - Node.js ≥ 18 (no npm dependencies — pure standard library)
 - The Playdate SDK (this repo is SDK 3.1.2), with `bin/PlaydateSimulator`, `bin/pdc`
-- `ffmpeg` with `x11grab` support
+- `ffmpeg` with `x11grab` and MP3 encoding support
 - `unzip`/`zip`
+- PulseAudio or PipeWire-Pulse plus `pactl` (`pulseaudio-utils`) for per-session game audio. Audio streaming is optional; set `AUDIO_ENABLED=0` to run without it.
 
 **macOS (Apple Silicon / Intel):**
 - macOS 13+ with a **logged-in GUI session** (the simulator is a native GUI app; no headless mode)
@@ -51,8 +54,6 @@ The Playdate Simulator shipped in the SDK is a **proprietary, stripped ELF** bui
 - The Playdate SDK for macOS (download from https://play.date/dev/)
 - `cliclick` for reliable input (`brew install cliclick`) — falls back to `osascript` keystrokes
 - Built-in tools: `screencapture`, `sips`, `osascript` (no install needed)
-
-## Setup
 
 ## Setup
 
@@ -86,6 +87,9 @@ Environment knobs:
 | `MAX_UPLOAD_BYTES` | 64 MiB | Upload cap |
 | `MAX_SESSIONS` | 3 | Concurrent simulator sessions |
 | `SESSION_IDLE_MS` | 10 min | Idle session reaping |
+| `AUDIO_ENABLED` | `1` | Set to `0` to disable session audio streaming |
+| `AUDIO_BITRATE` | `96k` | MP3 bitrate for the browser audio stream |
+| `PLAYDATE_VOLUME` | `200` | System volume seeded into `Disk/System/Data/global.settings` when it is missing or zero |
 
 ## Building a game to upload
 
@@ -109,6 +113,7 @@ Then upload `FlippyFish.zip` in the UI. Folder uploads are supported too: the br
 | `GET` | `/api/sessions/:id` | Session status |
 | `DELETE` | `/api/sessions/:id` | Stop session |
 | `GET` | `/api/sessions/:id/frames` | MJPEG stream (`multipart/x-mixed-replace`) |
+| `GET` | `/api/sessions/:id/audio` | Live MP3 audio stream (`audio/mpeg`; Linux) |
 | `POST` | `/api/sessions/:id/input` | Send input |
 | `GET` | `/api/health` | Health check |
 
@@ -117,22 +122,30 @@ Input payloads:
 ```json
 {"type":"button","button":"A","action":"down"}   // A/B/up/down/left/right
 {"type":"button","button":"A","action":"up"}
-{"type":"crank","delta":4}                       // degrees; one wheel click = 4°
+{"type":"crank","delta":4.5}                     // degrees; fractional deltas accumulate
 {"type":"dock","docked":true}                    // crank docked checkbox
 {"type":"menu"}                                  // device MENU button
 ```
 
 ## Controls
 
-- **Keyboard:** arrows = D-pad, `S` = Playdate **A**, `A` = Playdate **B** (the simulator's default mapping)
+- **Keyboard:** arrows = D-pad, `S` = Playdate **A**, `A` = Playdate **B** (the simulator's default mapping), `,`/`.` = crank
 - **On-screen:** click/tap the D-pad and round A/B buttons
-- **Crank:** mouse wheel over the screen (4° per click), or drag the dial
-- **Menu:** the MENU button on the right of the device
+- **Crank:** drag the round dial continuously (the angle is unbounded, like a real crank), or scroll over the screen
+- **Menu:** the MENU button on the right of the device; it is held briefly so the simulator registers the press
+- **Sound:** the browser's sound button toggles the live game audio stream (Linux). Browsers may require one interaction before audible autoplay is allowed.
+
+## Performance notes
+
+- The browser reads the MJPEG stream with `fetch()`, parses JPEG frames itself, and draws the newest frame to a `<canvas>`. If decoding cannot keep up, intermediate frames are dropped instead of queuing up, so input-to-screen latency stays low. Browsers without streaming `fetch` fall back to a plain `<img>`.
+- Input commands are serialized on the server. A crank turn is sent as one batched `xdotool click --repeat` instead of one process per 4° notch, so a 360° flick completes in milliseconds rather than seconds.
+- The virtual display is 900×820 (just large enough for the simulator window), and the framebuffer is captured at exactly 400×240 from the window's real origin, with no bezel included.
+- Each session captures audio into its own PulseAudio null sink; the browser receives a 96 kbps MP3 stream.
 
 ## Security notes
 
 - Uploads must be zip archives; entries with absolute paths, `..` traversal, or drive letters are rejected before extraction.
-- Each session runs in its own `HOME` directory, seeded with `ShowElist=0` / `ShowPerfWarning=0` so the simulator starts clean.
+- Each session runs in its own `HOME` directory and its own PulseAudio null sink, seeded with `ShowElist=0` / `ShowPerfWarning=0` so the simulator starts clean.
 - Sessions are isolated on separate virtual X displays and are capped/reaped by idle time.
 - Uploaded games are untrusted code executed by the simulator process; run this service in a sandbox/container if you expose it publicly.
 
@@ -141,14 +154,16 @@ Input payloads:
 ```
 webapp/
 ├── server/
-│   ├── config.js      paths, limits, geometry
+│   ├── config.js      paths, limits, geometry, audio settings
+│   ├── platform.js    shared subprocess/stream helpers, config seeding
+│   ├── platform/      Linux (Xvfb/xdotool/audio) and macOS implementations
 │   ├── ziputil.js     zip validation + extraction
 │   ├── games.js       pdxinfo parsing, registration, library
-│   ├── sessions.js    Xvfb + simulator + capture + input
-│   └── index.js       HTTP routes + MJPEG streaming
+│   ├── sessions.js    session lifecycle, serialized input, frame/audio fan-out
+│   └── index.js       HTTP routes + MJPEG/MP3 streaming
 ├── public/
 │   ├── index.html     UI
-│   ├── app.js         upload, library, player, input
+│   ├── app.js         upload, library, canvas player, audio, crank, input
 │   ├── zip.js         dependency-free zip writer for folder uploads
 │   ├── styles.css
 │   └── favicon.svg

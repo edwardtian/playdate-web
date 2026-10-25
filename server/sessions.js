@@ -29,17 +29,49 @@ class Session extends EventEmitter {
     this.docked = true;
     this.crankAngle = 0;
     this.buttonsDown = new Set();
+    this.audioSubscribers = new Set();
+    this.audioAvailable = false;
+    this.audioBytes = 0;
+    this.inputChain = Promise.resolve();
     this.impl = null;
   }
 
   pushFrame(frame) {
     this.frameCount += 1;
     this.lastFrameAt = Date.now();
+    // Watching counts as activity; otherwise an idle viewer's session would
+    // be reaped even though frames are still being delivered.
+    if (this.frameSubscribers.size || this.audioSubscribers.size) {
+      this.lastInputAt = Date.now();
+    }
     this.lastFrame = frame;
     this.emit('frame', frame);
     for (const sub of this.frameSubscribers) {
       try { sub(frame); } catch { /* broken subscriber */ }
     }
+  }
+
+  pushAudio(chunk) {
+    if (!chunk || !chunk.length || this.state === 'stopped') return;
+    this.audioBytes += chunk.length;
+    for (const sub of this.audioSubscribers) {
+      try { sub(chunk); } catch { /* broken subscriber */ }
+    }
+  }
+
+  subscribeAudio(fn) {
+    this.audioSubscribers.add(fn);
+    return () => this.audioSubscribers.delete(fn);
+  }
+
+  // xdotool commands must be serialized: otherwise a keyup can overtake its
+  // keydown and crank events can interleave, which makes the simulator miss
+  // input.  The queue also keeps the UI responsive because every request is
+  // still acknowledged independently.
+  enqueueInput(fn) {
+    const run = this.inputChain.then(fn, fn);
+    this.inputChain = run.catch(() => {});
+    return run;
   }
 
   async start() {
@@ -49,6 +81,7 @@ class Session extends EventEmitter {
         ? new platform.DarwinSession(this)
         : new platform.LinuxSession(this);
       await this.impl.start();
+      if (this.state !== 'starting') return;
       this.state = 'running';
       this.emit('ready');
     } catch (err) {
@@ -69,43 +102,51 @@ class Session extends EventEmitter {
     }
     this.lastInputAt = Date.now();
 
-    if (command.type === 'button') {
-      const button = command.button;
-      if (!['A', 'B', 'up', 'down', 'left', 'right'].includes(button)) {
-        throw new Error(`Unknown button: ${button}`);
+    return this.enqueueInput(async () => {
+      if (command.type === 'button') {
+        const button = command.button;
+        if (!['A', 'B', 'up', 'down', 'left', 'right'].includes(button)) {
+          throw new Error(`Unknown button: ${button}`);
+        }
+        if (command.action !== 'down' && command.action !== 'up') {
+          throw new Error(`Unknown button action: ${command.action}`);
+        }
+        await this.impl.sendButton(button, command.action);
+        if (command.action === 'down') this.buttonsDown.add(button);
+        else this.buttonsDown.delete(button);
+        return { buttons: [...this.buttonsDown] };
       }
-      if (command.action === 'down') {
-        await this.impl.sendButton(button, 'down');
-        this.buttonsDown.add(button);
-      } else {
-        await this.impl.sendButton(button, 'up');
-        this.buttonsDown.delete(button);
+
+      if (command.type === 'crank') {
+        const delta = Number(command.delta);
+        if (!Number.isFinite(delta) || delta === 0) {
+          return { crank: this.crankAngle, docked: this.docked };
+        }
+        // A single request can carry a whole turn; cap absurd values so one
+        // malformed client cannot block the input queue indefinitely.
+        const clamped = Math.max(-1080, Math.min(1080, delta));
+        const moved = await this.impl.crank(clamped);
+        this.crankAngle += clamped;
+        if (moved) this.docked = false;
+        return { crank: this.crankAngle, docked: this.docked };
       }
-      return { buttons: [...this.buttonsDown] };
-    }
 
-    if (command.type === 'crank') {
-      await this.impl.crank(command.delta);
-      this.crankAngle += Number(command.delta) || 0;
-      this.docked = false;
-      return { crank: this.crankAngle, docked: this.docked };
-    }
-
-    if (command.type === 'dock') {
-      const desired = command.docked === undefined ? !this.docked : Boolean(command.docked);
-      if (desired !== this.docked) {
-        await this.impl.setDocked(desired);
-        this.docked = desired;
+      if (command.type === 'dock') {
+        const desired = command.docked === undefined ? !this.docked : Boolean(command.docked);
+        if (desired !== this.docked) {
+          await this.impl.setDocked(desired);
+          this.docked = desired;
+        }
+        return { docked: this.docked };
       }
-      return { docked: this.docked };
-    }
 
-    if (command.type === 'menu') {
-      await this.impl.menu();
-      return { menu: true };
-    }
+      if (command.type === 'menu') {
+        await this.impl.menu();
+        return { menu: true };
+      }
 
-    throw new Error(`Unknown command type: ${command.type}`);
+      throw new Error(`Unknown command type: ${command.type}`);
+    });
   }
 
   subscribeFrame(fn) {
@@ -118,6 +159,10 @@ class Session extends EventEmitter {
     if (this.state === 'stopped') return;
     this.state = 'stopped';
     try { if (this.impl) await this.impl.stop(); } catch { /* ignore */ }
+    this.emit('frameEnd');
+    this.frameSubscribers.clear();
+    this.audioSubscribers.clear();
+    this.emit('audioEnd');
     sessions.delete(this.id);
     try {
       const dir = path.join(cfg.sessionsDir, this.id);
@@ -136,19 +181,24 @@ async function startSession(game) {
   const s = new Session(game);
   sessions.set(s.id, s);
   await new Promise((resolve, reject) => {
+    let timer = null;
     const onReady = () => { cleanup(); resolve(); };
     const onFailed = (msg) => { cleanup(); reject(new Error(msg)); };
-    const cleanup = () => { s.off('ready', onReady); s.off('failed', onFailed); };
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      s.off('ready', onReady);
+      s.off('failed', onFailed);
+    };
     s.on('ready', onReady);
     s.on('failed', onFailed);
-    s.start();
-    setTimeout(() => {
+    timer = setTimeout(() => {
       if (s.state === 'starting') {
         cleanup();
         s.fail('Session startup timed out');
         reject(new Error('Session startup timed out'));
       }
     }, 30000);
+    s.start();
   });
   return s;
 }
@@ -168,6 +218,8 @@ function listSessions() {
     error: s.error,
     docked: s.docked,
     crank: s.crankAngle,
+    audio: s.audioAvailable,
+    audioBytes: s.audioBytes,
   }));
 }
 

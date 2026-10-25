@@ -17,10 +17,12 @@ It is **closed-source and stripped**. There is no source tree, and the runtime i
 
 This app runs the real simulator on a virtual X display and streams only the 400×240 framebuffer to the browser:
 
-- `Xvfb :N -screen 0 1280x900x24 -listen tcp -extension GLX` (TCP display avoids needing root-owned `/tmp/.X11-unix`)
-- `PlaydateSimulator game.pdx` with `GDK_BACKEND=x11` and `WEBKIT_DISABLE_COMPOSITING_MODE=1`
+- `Xvfb :N -screen 0 900x820x24 -listen tcp -extension GLX` (TCP display avoids needing root-owned `/tmp/.X11-unix`)
+- `PlaydateSimulator game.pdx` with `GDK_BACKEND=x11`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`, and a per-session `HOME`
 - `ffmpeg -f x11grab -draw_mouse 0 -video_size 400x240 -i 127.0.0.1:N.0+X,Y -r 30 -f mjpeg pipe:1`
-- input via `xdotool` (XTEST): arrows = D-pad, `s` = A, `a` = B; mouse wheel = crank (4°/click); clicks on the docked checkbox and MENU button
+- audio: a private PulseAudio null sink per session (`PULSE_SINK`), captured with `ffmpeg -f pulse -i <sink>.monitor` and encoded to MP3
+- input via `xdotool` (XTEST): arrows = D-pad, `s` = A, `a` = B; mouse wheel = crank (batched 4° notches); the docked checkbox and MENU button are pressed with a short hold because the simulator's wxWidgets controls miss zero-length synthetic clicks
+- the browser parses JPEG frames from the MJPEG stream and draws the newest one to a `<canvas>`, dropping stale frames if decoding falls behind
 
 Fidelity is maximal: Lua runtime, `pdex` C code, CoreLibs, audio, sprite/collision semantics are the official ones. This is why it was chosen over an emulator port.
 

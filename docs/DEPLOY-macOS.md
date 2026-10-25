@@ -136,6 +136,7 @@ launchctl load ~/Library/LaunchAgents/com.playdate.websim.plist
 - **Frame rate.** `screencapture` is called per frame, so it's slower than Linux's continuous `ffmpeg` grab. Expect ~10–15 fps depending on the Mac.
 - **Screen Recording permission.** The first capture triggers a macOS permission prompt; grant it once.
 - **Crank.** Controlled with `[` / `]` keyboard keys (built into the simulator). The `cliclick` tool provides the most reliable key events; without it the app falls back to `osascript` keystrokes (no hold support).
+- **Audio streaming is Linux-only.** macOS does not get a per-session PulseAudio null sink; the simulator's audio plays on the Mac's own output but is not sent to the browser.
 
 ## Verifying the deployment
 

@@ -29,19 +29,46 @@ const cfg = {
   sessionIdleTimeoutMs: Number(process.env.SESSION_IDLE_MS || 10 * 60 * 1000),
 
   // Display / capture geometry
-  displayWidth: 1280,
-  displayHeight: 900,
+  // The simulator window is 482x708 at (399,96).  A 900x820 virtual display
+  // is large enough for it and keeps the Xvfb framebuffer substantially
+  // smaller than the old 1280x900 screen (less memory traffic and CPU for
+  // the X server).
+  displayWidth: 900,
+  displayHeight: 820,
   windowX: 399,
   windowY: 96,
   windowWidth: 482,
   windowHeight: 708,
-  // Framebuffer offset within the simulator window (Linux: measured at (399,96)).
-  // On macOS the title bar adds ~28px to the top; we probe at runtime.
+  // Framebuffer offset within the simulator window.  The Playdate screen is
+  // the 400x240 rectangle inside the simulated device's bezel.  For the Linux
+  // simulator at 1x these offsets are 18,45.  A wrong offset leaves a black
+  // strip around the captured image, which is very visible for edge-to-edge
+  // games.  On macOS the title bar adds ~28px to the top; that platform
+  // calibrates at runtime.
   fbOffsetX: 18,
   fbOffsetY: 45,
   fbWidth: 400,
   fbHeight: 240,
   captureFps: 30,
+
+  // Relative coordinates inside the simulator window used for mouse input.
+  // The MENU control is a wxWidgets button that needs a real press/hold, and
+  // the dock checkbox is a small target; keep both in one place.
+  menuX: 453,
+  menuY: 95,
+  dockX: 264,
+  dockY: 515,
+  crankWheelX: 200,
+  crankWheelY: 150,
+
+  // Audio.  Each Linux session gets its own PulseAudio null sink so games can
+  // be streamed to one browser without other sessions bleeding in.
+  audioEnabled: process.env.AUDIO_ENABLED !== '0',
+  audioBitrate: process.env.AUDIO_BITRATE || '96k',
+  defaultSystemVolume: (() => {
+    const n = Number(process.env.PLAYDATE_VOLUME ?? 200);
+    return Number.isFinite(n) ? Math.max(0, Math.min(255, Math.round(n))) : 200;
+  })(),
 };
 
 if (IS_MAC) {
@@ -53,6 +80,7 @@ if (IS_MAC) {
 } else {
   cfg.xvfbPath = path.join(cfg.vendorX11Dir, 'usr', 'bin', 'Xvfb');
   cfg.xdotoolPath = path.join(cfg.vendorX11Dir, 'usr', 'bin', 'xdotool');
+  cfg.xdpyinfoPath = path.join(cfg.vendorX11Dir, 'usr', 'bin', 'xdpyinfo');
   cfg.x11LibDir = path.join(cfg.vendorX11Dir, 'usr', 'lib', 'x86_64-linux-gnu');
   cfg.simulatorPath = path.join(cfg.sdkPath, 'bin', 'PlaydateSimulator');
   cfg.pdcPath = path.join(cfg.sdkPath, 'bin', 'pdc');

@@ -67,6 +67,24 @@ async function readFrames(url, ms = 2500) {
   return { bytes: buf.length, frames };
 }
 
+async function readBytes(url, ms = 1500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  const chunks = [];
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(Buffer.from(value));
+    }
+  } catch { /* aborted, that's expected for a live stream */ }
+  clearTimeout(timer);
+  return Buffer.concat(chunks);
+}
+
 async function main() {
   const step = (msg) => console.log(`• ${msg}`);
 
@@ -102,6 +120,15 @@ async function main() {
   step(`Received ${frames1.frames.length} frames (${frames1.bytes} bytes)`);
   if (!frames1.frames.length) throw new Error('no frames received');
 
+  if (sessBody.session.audioUrl) {
+    step('Reading audio stream');
+    const audio = await readBytes(`${BASE}${sessBody.session.audioUrl}`, 1500);
+    step(`Received ${audio.length} bytes of MP3 audio`);
+    if (audio.length < 256) throw new Error('no audio received');
+  } else {
+    step('Audio stream unavailable on this platform (skipped)');
+  }
+
   step('Sending button + crank + dock input');
   for (const payload of [
     { type: 'button', button: 'A', action: 'down' },
@@ -118,6 +145,13 @@ async function main() {
     if (!r.ok) throw new Error(`input failed: ${(await r.json()).error}`);
   }
   step('Input accepted');
+
+  const statusRes = await fetch(`${BASE}/api/sessions/${sessionId}`);
+  const statusBody = await statusRes.json();
+  if (!statusRes.ok) throw new Error(`status failed: ${statusBody.error}`);
+  if (statusBody.session.crank !== 8) {
+    throw new Error(`crank state mismatch: ${statusBody.session.crank}`);
+  }
 
   step('Reading frames after input');
   const frames2 = await readFrames(`${BASE}/api/sessions/${sessionId}/frames`);

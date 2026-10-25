@@ -52,6 +52,45 @@ function seedSimulatorConfig(homeDir, pdxDir) {
     'Release=3.1.2', '',
   ].join('\n');
   fs.writeFileSync(confPath, content);
+  seedGlobalSettings();
+}
+
+// The Playdate OS keeps the device volume in Disk/System/Data/global.settings.
+// The simulator starts with volume 0 when that key is missing, which makes
+// every game silent.  Seed a sensible volume once; afterwards respect an
+// explicit non-zero user setting.
+function seedGlobalSettings(volume = cfg.defaultSystemVolume) {
+  if (cfg.isMac) return;
+  const level = Number.isFinite(Number(volume))
+    ? Math.max(0, Math.min(255, Math.round(Number(volume))))
+    : 200;
+  const file = path.join(cfg.workspace, 'Disk', 'System', 'Data', 'global.settings');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+
+  let lines = [];
+  try {
+    lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+  } catch { /* file doesn't exist yet */ }
+  while (lines.length && lines[lines.length - 1] === '') lines.pop();
+
+  let found = false;
+  let current = NaN;
+  lines = lines.map((line) => {
+    const m = line.match(/^volume=(\d+)\s*$/);
+    if (!m) return line;
+    found = true;
+    current = Number(m[1]);
+    return line;
+  });
+
+  if (!found) {
+    lines.push(`volume=${level}`);
+  } else if (!Number.isFinite(current) || current <= 0) {
+    lines = lines.map((line) => (line.startsWith('volume=') ? `volume=${level}` : line));
+  } else {
+    return; // Respect an explicit non-zero volume chosen in the simulator UI.
+  }
+  fs.writeFileSync(file, `${lines.join('\n')}\n`);
 }
 
 // Detect the host platform and return its module.
@@ -67,6 +106,7 @@ module.exports = {
   sleep,
   FrameSplitter,
   seedSimulatorConfig,
+  seedGlobalSettings,
   loadPlatform,
   cfg,
 };

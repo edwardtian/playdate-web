@@ -34,13 +34,17 @@
       <div class="player-header">
         <h2 id="playerTitle">Player</h2>
         <span id="sessionState" class="pill">idle</span>
+        <button id="btnSound" class="btn btn-ghost" disabled title="Toggle game audio">Sound: off</button>
         <button id="btnShare" class="btn btn-ghost" disabled>Copy share link</button>
         <button id="btnStop" class="btn btn-ghost" disabled>Stop session</button>
       </div>
 
+      <audio id="gameAudio" preload="none" playsinline></audio>
+
       <div class="device-stage">
         <div class="screen-shell">
           <div class="screen">
+            <canvas id="screenCanvas" width="400" height="240" aria-label="Playdate screen"></canvas>
             <img id="screenImg" alt="Playdate screen" />
             <div id="screenPlaceholder" class="screen-placeholder">
               <p>Pick a game and press <strong>Play</strong>.</p>
@@ -51,7 +55,11 @@
         <div class="side-controls">
           <button class="menu-btn" id="btnMenu" title="Menu">MENU</button>
           <div class="dial">
-            <input id="dialAngle" type="range" min="0" max="359" value="0" step="1" class="dial-range" />
+            <div id="crankDial" class="crank-dial" role="slider" tabindex="0"
+                 aria-label="Crank" aria-valuemin="0" aria-valuemax="359" aria-valuenow="0">
+              <div id="crankPointer" class="crank-pointer"></div>
+              <div class="crank-hub"></div>
+            </div>
             <div class="dial-readout"><span id="dialValue">0°</span></div>
           </div>
           <label class="dock-toggle">
@@ -75,8 +83,9 @@
       </div>
 
       <div class="keyboard-hint">
-        <p><strong>Keyboard:</strong> arrows = D-pad, <kbd>S</kbd> = A button, <kbd>A</kbd> = B button.
-        <strong>Crank:</strong> mouse wheel over the screen, or drag the dial.</p>
+        <p><strong>Keyboard:</strong> arrows = D-pad, <kbd>S</kbd> = A button, <kbd>A</kbd> = B button,
+        <kbd>,</kbd>/<kbd>.</kbd> = crank.
+        <strong>Crank:</strong> drag the round dial to turn it continuously, or scroll the mouse wheel over the screen.</p>
       </div>
 
       <div class="console-log">
