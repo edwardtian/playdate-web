@@ -395,109 +395,206 @@ function setSoundButton(label, on) {
   b.dataset.on = on ? 'true' : 'false';
 }
 
-function disarmAudioEnable() {
-  if (state.audioEnableHandler) {
-    document.removeEventListener('pointerdown', state.audioEnableHandler, true);
-    state.audioEnableHandler = null;
+function ensureAudioContext() {
+  if (audio.ctx) {
+    if (audio.ctx.state === 'closed') {
+      audio.ctx = null;
+      audio.gain = null;
+    } else {
+      if (audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {});
+      return audio.ctx;
+    }
   }
-  if (state.audioEnableKeyHandler) {
-    document.removeEventListener('keydown', state.audioEnableKeyHandler, true);
-    state.audioEnableKeyHandler = null;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  try {
+    audio.ctx = new Ctx({ latencyHint: 'interactive', sampleRate: AUDIO_SAMPLE_RATE });
+  } catch {
+    try {
+      audio.ctx = new Ctx({ latencyHint: 'interactive' });
+    } catch {
+      return null;
+    }
   }
+  audio.gain = audio.ctx.createGain();
+  audio.gain.gain.value = 0;
+  audio.gain.connect(audio.ctx.destination);
+  audio.ctx.addEventListener('statechange', () => {
+    if (audio.ctx.state !== 'running') {
+      dropScheduledAudio();
+      if (audio.available) setSoundButton('Enable sound', false);
+    } else if (audio.available) {
+      setSoundButton(audio.muted ? 'Sound: off' : 'Sound: on', !audio.muted);
+    }
+  });
+  return audio.ctx;
+}
+
+function dropScheduledAudio() {
+  for (const source of audio.sources) {
+    try { source.stop(); } catch { /* ignore */ }
+  }
+  audio.sources.clear();
+  audio.nextTime = 0;
 }
 
 function stopAudio() {
-  disarmAudioEnable();
-  const audio = el('gameAudio');
-  try {
-    audio.pause();
-    audio.removeAttribute('src');
-    audio.load();
-  } catch { /* ignore */ }
+  audio.token += 1;
+  if (audio.abort) {
+    try { audio.abort.abort(); } catch { /* ignore */ }
+    audio.abort = null;
+  }
+  audio.url = null;
+  audio.started = false;
+  audio.available = false;
   audio.muted = false;
-  state.audioEnabled = false;
-  state.audioBlocked = false;
-  state.audioJustEnabled = false;
+  dropScheduledAudio();
+  if (audio.gain) audio.gain.gain.value = 0;
   el('btnSound').disabled = true;
   setSoundButton('Sound: off', false);
 }
 
 function setupAudio(session) {
   stopAudio();
-  const audio = el('gameAudio');
-  if (!session?.audioUrl) {
+  if (!session?.audioUrl || !ensureAudioContext()) {
     el('btnSound').disabled = true;
     setSoundButton('Sound: n/a', false);
     return;
   }
 
+  audio.available = true;
+  audio.url = session.audioUrl;
+  audio.muted = false;
   el('btnSound').disabled = false;
-  state.audioEnabled = true;
-  state.audioBlocked = false;
-  audio.src = `${session.audioUrl}?t=${Date.now()}`;
-  audio.load();
-  setSoundButton('Sound: on', true);
+  if (audio.gain) audio.gain.gain.value = 1;
 
-  const started = audio.play();
-  if (started && typeof started.catch === 'function') {
-    started.catch(() => {
-      // Browsers often block audible autoplay.  Start muted (which is
-      // allowed) and unmute on the next user gesture.
-      state.audioBlocked = true;
-      audio.muted = true;
-      audio.play().catch(() => { /* give up until the button is pressed */ });
-      setSoundButton('Enable sound', false);
-      armAudioEnable();
-    });
-  }
-}
-
-function armAudioEnable() {
-  disarmAudioEnable();
-  const enable = () => {
-    const audio = el('gameAudio');
-    if (!state.audioBlocked || !audio.src) return;
-    state.audioBlocked = false;
-    state.audioJustEnabled = true;
-    setTimeout(() => { state.audioJustEnabled = false; }, 400);
-    audio.muted = false;
-    audio.play().then(() => {
-      setSoundButton('Sound: on', true);
-    }).catch(() => {
-      state.audioBlocked = true;
-      setSoundButton('Enable sound', false);
-    });
-    disarmAudioEnable();
-  };
-  state.audioEnableHandler = enable;
-  state.audioEnableKeyHandler = enable;
-  document.addEventListener('pointerdown', enable, true);
-  document.addEventListener('keydown', enable, true);
-}
-
-el('btnSound').addEventListener('click', () => {
-  // The document-level autoplay unlock runs on pointerdown, before this
-  // click.  Do not immediately toggle the stream back off.
-  if (state.audioJustEnabled) {
-    state.audioJustEnabled = false;
+  if (audio.ctx.state === 'running') {
+    startAudioStream();
+    setSoundButton('Sound: on', true);
     return;
   }
-  const audio = el('gameAudio');
-  if (!audio.src) return;
-  if (!state.audioEnabled || audio.muted || state.audioBlocked) {
-    state.audioEnabled = true;
-    state.audioBlocked = false;
-    audio.muted = false;
-    audio.play().then(() => setSoundButton('Sound: on', true)).catch(() => {
-      state.audioBlocked = true;
+
+  // Autoplay policy: the context is suspended until a user gesture.  Try
+  // once (the Play click may still count); otherwise ask for a click.
+  setSoundButton('Enable sound', false);
+  audio.ctx.resume().then(() => {
+    if (!audio.available) return;
+    if (audio.ctx.state === 'running') {
+      startAudioStream();
+      setSoundButton('Sound: on', true);
+    } else {
       setSoundButton('Enable sound', false);
-      armAudioEnable();
-    });
-  } else {
-    state.audioEnabled = false;
-    audio.muted = true;
-    setSoundButton('Sound: off', false);
+    }
+  }).catch(() => setSoundButton('Enable sound', false));
+}
+
+function startAudioStream() {
+  if (!audio.available || audio.started || !audio.url) return;
+  ensureAudioContext();
+  if (!audio.ctx || audio.ctx.state !== 'running') return;
+  const token = ++audio.token;
+  audio.started = true;
+  audio.nextTime = 0;
+  audio.abort = new AbortController();
+  fetchPcmStream(audio.url, token).catch((err) => {
+    if (token !== audio.token) return; // stopped or replaced
+    audio.started = false;
+    setSoundButton('Enable sound', false);
+    el('logOutput').textContent = `Audio stream failed: ${err.message}`;
+  });
+}
+
+async function fetchPcmStream(url, token) {
+  const res = await fetch(`${url}?t=${Date.now()}`, {
+    cache: 'no-store',
+    signal: audio.abort.signal,
+  });
+  if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+  const reader = res.body.getReader();
+  let carry = new Uint8Array(0);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (token !== audio.token) return;
+    if (!value || !value.length) continue;
+
+    let data = value;
+    if (carry.length) {
+      data = new Uint8Array(carry.length + value.length);
+      data.set(carry, 0);
+      data.set(value, carry.length);
+    }
+    // s16le stereo -> 4 bytes per frame.  A network chunk can split a frame.
+    const usable = data.length - (data.length % 4);
+    if (usable > 0) schedulePcm(data.subarray(0, usable), token);
+    carry = usable < data.length ? data.slice(usable) : new Uint8Array(0);
   }
+  if (token === audio.token) {
+    audio.started = false;
+    setSoundButton('Enable sound', false);
+  }
+}
+
+function schedulePcm(bytes, token) {
+  if (token !== audio.token || !audio.ctx || !audio.gain) return;
+  const ctx = audio.ctx;
+  if (ctx.state !== 'running') {
+    audio.nextTime = 0;
+    return;
+  }
+  const frames = bytes.length >> 2;
+  if (!frames) return;
+
+  const now = ctx.currentTime;
+  if (audio.nextTime && audio.nextTime - now > AUDIO_MAX_LEAD_SECONDS) {
+    // A burst or a slow frame rate would otherwise build a latency queue.
+    dropScheduledAudio();
+  }
+  let startAt = Math.max(now + AUDIO_LEAD_SECONDS, audio.nextTime || 0);
+  if (startAt < now) {
+    dropScheduledAudio();
+    startAt = now + AUDIO_LEAD_SECONDS;
+  }
+
+  const buffer = ctx.createBuffer(2, frames, AUDIO_SAMPLE_RATE);
+  const left = buffer.getChannelData(0);
+  const right = buffer.getChannelData(1);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let i = 0, offset = 0; i < frames; i++, offset += 4) {
+    left[i] = view.getInt16(offset, true) / 32768;
+    right[i] = view.getInt16(offset + 2, true) / 32768;
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audio.gain);
+  source.onended = () => audio.sources.delete(source);
+  audio.sources.add(source);
+  source.start(startAt);
+  audio.nextTime = startAt + buffer.duration;
+}
+
+el('btnSound').addEventListener('click', async () => {
+  if (!audio.available) return;
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+
+  if (ctx.state !== 'running' || !audio.started) {
+    try { await ctx.resume(); } catch { /* ignore */ }
+    if (ctx.state !== 'running') {
+      setSoundButton('Enable sound', false);
+      return;
+    }
+    audio.muted = false;
+    if (audio.gain) audio.gain.gain.value = 1;
+    if (!audio.started) startAudioStream();
+    setSoundButton('Sound: on', true);
+    return;
+  }
+
+  audio.muted = !audio.muted;
+  if (audio.gain) audio.gain.gain.value = audio.muted ? 0 : 1;
+  setSoundButton(audio.muted ? 'Sound: off' : 'Sound: on', !audio.muted);
 });
 
 // ---- Input ------------------------------------------------------------------

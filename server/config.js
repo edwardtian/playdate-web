@@ -64,7 +64,6 @@ const cfg = {
   // Audio.  Each Linux session gets its own PulseAudio null sink so games can
   // be streamed to one browser without other sessions bleeding in.
   audioEnabled: process.env.AUDIO_ENABLED !== '0',
-  audioBitrate: process.env.AUDIO_BITRATE || '96k',
   defaultSystemVolume: (() => {
     const n = Number(process.env.PLAYDATE_VOLUME ?? 200);
     return Number.isFinite(n) ? Math.max(0, Math.min(255, Math.round(n))) : 200;

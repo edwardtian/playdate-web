@@ -123,7 +123,7 @@ async function main() {
   if (sessBody.session.audioUrl) {
     step('Reading audio stream');
     const audio = await readBytes(`${BASE}${sessBody.session.audioUrl}`, 1500);
-    step(`Received ${audio.length} bytes of MP3 audio`);
+    step(`Received ${audio.length} bytes of PCM audio`);
     if (audio.length < 256) throw new Error('no audio received');
   } else {
     step('Audio stream unavailable on this platform (skipped)');

@@ -20,9 +20,9 @@ This app runs the real simulator on a virtual X display and streams only the 400
 - `Xvfb :N -screen 0 900x820x24 -listen tcp -extension GLX` (TCP display avoids needing root-owned `/tmp/.X11-unix`)
 - `PlaydateSimulator game.pdx` with `GDK_BACKEND=x11`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`, and a per-session `HOME`
 - `ffmpeg -f x11grab -draw_mouse 0 -video_size 400x240 -i 127.0.0.1:N.0+X,Y -r 30 -f mjpeg pipe:1`
-- audio: a private PulseAudio null sink per session (`PULSE_SINK`), captured with `ffmpeg -f pulse -i <sink>.monitor` and encoded to MP3
+- audio: a private PulseAudio null sink per session (`PULSE_SINK`), captured with `ffmpeg -f pulse -i <sink>.monitor` as raw 48 kHz stereo PCM
 - input via `xdotool` (XTEST): arrows = D-pad, `s` = A, `a` = B; mouse wheel = crank (batched 4° notches); the docked checkbox and MENU button are pressed with a short hold because the simulator's wxWidgets controls miss zero-length synthetic clicks
-- the browser parses JPEG frames from the MJPEG stream and draws the newest one to a `<canvas>`, dropping stale frames if decoding falls behind
+- the browser parses JPEG frames from the MJPEG stream and draws the newest one to a `<canvas>`, dropping stale frames if decoding falls behind; PCM audio is scheduled in Web Audio with a small lead so menu sounds stay in sync
 
 Fidelity is maximal: Lua runtime, `pdex` C code, CoreLibs, audio, sprite/collision semantics are the official ones. This is why it was chosen over an emulator port.
 

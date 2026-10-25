@@ -2,7 +2,7 @@
 
 A small web application that lets a creator **upload a compiled Playdate `.pdx` bundle** and lets **other visitors play it in the official Playdate Simulator** — without installing the SDK or owning a Playdate.
 
-The browser UI shows the real 400×240 device screen, a working D-pad / A / B controller, a continuously rotatable crank dial, the Menu button, and game audio. Input is sent to the simulator on the server, which streams its framebuffer back to the browser at ~30 fps (decoded on a `<canvas>` with stale-frame dropping) and its audio as a live MP3 stream.
+The browser UI shows the real 400×240 device screen, a working D-pad / A / B controller, a continuously rotatable crank dial, the Menu button, and game audio. Input is sent to the simulator on the server, which streams its framebuffer back to the browser at ~30 fps (decoded on a `<canvas>` with stale-frame dropping) and its audio as a low-latency PCM stream played through Web Audio.
 
 **Runs on Linux and macOS.** On Linux it uses Xvfb + ffmpeg + xdotool (fully headless) and a private PulseAudio null sink per session for audio. On macOS it uses `screencapture` + `cliclick`/`osascript` (needs a logged-in GUI session); audio streaming is Linux-only. See [docs/DEPLOY-macOS.md](docs/DEPLOY-macOS.md) for the Mac mini deployment guide.
 
@@ -12,7 +12,7 @@ The browser UI shows the real 400×240 device screen, a working D-pad / A / B co
                           ▼
   Xvfb ──► PlaydateSimulator game.pdx ──► ffmpeg x11grab ──► MJPEG ──► browser canvas
                           │
-                          └──► PulseAudio null sink ──► ffmpeg ──► MP3 ──► browser <audio>
+                          └──► PulseAudio null sink ──► ffmpeg ──► PCM ──► browser Web Audio
                           ▲
                      xdotool input (keys / wheel / clicks)
 
@@ -44,7 +44,7 @@ The Playdate Simulator shipped in the SDK is a **proprietary, stripped ELF** bui
 - Linux x86_64 with `apt-get` available (for the X11 helper tools)
 - Node.js ≥ 18 (no npm dependencies — pure standard library)
 - The Playdate SDK (this repo is SDK 3.1.2), with `bin/PlaydateSimulator`, `bin/pdc`
-- `ffmpeg` with `x11grab` and MP3 encoding support
+- `ffmpeg` with `x11grab` support
 - `unzip`/`zip`
 - PulseAudio or PipeWire-Pulse plus `pactl` (`pulseaudio-utils`) for per-session game audio. Audio streaming is optional; set `AUDIO_ENABLED=0` to run without it.
 
@@ -88,7 +88,6 @@ Environment knobs:
 | `MAX_SESSIONS` | 3 | Concurrent simulator sessions |
 | `SESSION_IDLE_MS` | 10 min | Idle session reaping |
 | `AUDIO_ENABLED` | `1` | Set to `0` to disable session audio streaming |
-| `AUDIO_BITRATE` | `96k` | MP3 bitrate for the browser audio stream |
 | `PLAYDATE_VOLUME` | `200` | System volume seeded into `Disk/System/Data/global.settings` when it is missing or zero |
 
 ## Building a game to upload
@@ -113,7 +112,7 @@ Then upload `FlippyFish.zip` in the UI. Folder uploads are supported too: the br
 | `GET` | `/api/sessions/:id` | Session status |
 | `DELETE` | `/api/sessions/:id` | Stop session |
 | `GET` | `/api/sessions/:id/frames` | MJPEG stream (`multipart/x-mixed-replace`) |
-| `GET` | `/api/sessions/:id/audio` | Live MP3 audio stream (`audio/mpeg`; Linux) |
+| `GET` | `/api/sessions/:id/audio` | Live PCM audio stream (`audio/L16;rate=48000;channels=2`; Linux) |
 | `POST` | `/api/sessions/:id/input` | Send input |
 | `GET` | `/api/health` | Health check |
 
@@ -140,7 +139,7 @@ Input payloads:
 - The browser reads the MJPEG stream with `fetch()`, parses JPEG frames itself, and draws the newest frame to a `<canvas>`. If decoding cannot keep up, intermediate frames are dropped instead of queuing up, so input-to-screen latency stays low. Browsers without streaming `fetch` fall back to a plain `<img>`.
 - Input commands are serialized on the server. A crank turn is sent as one batched `xdotool click --repeat` instead of one process per 4° notch, so a 360° flick completes in milliseconds rather than seconds.
 - The virtual display is 900×820 (just large enough for the simulator window), and the framebuffer is captured at exactly 400×240 from the window's real origin, with no bezel included.
-- Each session captures audio into its own PulseAudio null sink; the browser receives a 96 kbps MP3 stream.
+- Each session captures audio into its own PulseAudio null sink. The browser receives raw 48 kHz stereo PCM and schedules it in Web Audio with a ~150 ms lead, avoiding the multi-second buffering of a live `<audio>` element.
 
 ## Security notes
 
@@ -160,7 +159,7 @@ webapp/
 │   ├── ziputil.js     zip validation + extraction
 │   ├── games.js       pdxinfo parsing, registration, library
 │   ├── sessions.js    session lifecycle, serialized input, frame/audio fan-out
-│   └── index.js       HTTP routes + MJPEG/MP3 streaming
+│   └── index.js       HTTP routes + MJPEG/PCM streaming
 ├── public/
 │   ├── index.html     UI
 │   ├── app.js         upload, library, canvas player, audio, crank, input

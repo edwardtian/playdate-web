@@ -201,8 +201,6 @@ kbd {
 .screen canvas { display: none; }
 .screen img { display: none; }
 
-#gameAudio { display: none; }
-
 .screen-placeholder {
   position: absolute;
   inset: 0;
