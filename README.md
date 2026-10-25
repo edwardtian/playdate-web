@@ -63,7 +63,9 @@ cd webapp
 # Linux: extract Xvfb + xdotool into vendor/x11 without needing root
 npm run setup:x11          # or bash scripts/setup-x11.sh
 
-# macOS: check prerequisites and permissions
+# macOS: check prerequisites and permissions.
+# If the SDK is not this repo, export PLAYDATE_SDK_PATH first (and
+# PLAYDATE_SIM_APP if the .app is outside the SDK). The checker reads both.
 npm run setup:macos        # or bash scripts/setup-macos.sh
 
 # Register SDK example games as playable content (optional but recommended)
@@ -73,7 +75,7 @@ npm run seed
 npm run start              # http://127.0.0.1:4173
 ```
 
-If the SDK lives elsewhere, set `PLAYDATE_SDK_PATH`. On macOS, if the simulator app is not at `bin/Playdate Simulator.app`, set `PLAYDATE_SIM_APP`. On Linux, if the X11 tools live elsewhere, set `X11_VENDOR_DIR`.
+If the SDK lives elsewhere, `export PLAYDATE_SDK_PATH=/path/to/SDK` **before** running the setup checker. On macOS, if the simulator app is not at `$PLAYDATE_SDK_PATH/bin/Playdate Simulator.app`, also `export PLAYDATE_SIM_APP=/path/to/Playdate Simulator.app`. On Linux, if the X11 tools live elsewhere, set `X11_VENDOR_DIR`.
 
 Environment knobs:
 

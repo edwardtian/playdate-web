@@ -2,6 +2,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 
 const ROOT = path.resolve(__dirname, '..');
 const WORKSPACE = path.resolve(ROOT, '..');
@@ -84,8 +85,30 @@ const cfg = {
 };
 
 if (IS_MAC) {
-  // macOS paths: SDK ships the app bundle; simulator binary inside it.
-  cfg.simulatorAppPath = process.env.PLAYDATE_SIM_APP ||
+  // macOS paths: SDK ships the app bundle; simulator binary inside it.  Keep
+  // this resolution in sync with scripts/setup-macos.sh so the checker and the
+  // server agree about which app they found.
+  const isDir = (p) => {
+    try { return fs.statSync(p).isDirectory(); } catch { return false; }
+  };
+  const home = os.homedir();
+  const candidates = [];
+  if (process.env.PLAYDATE_SIM_APP) candidates.push(process.env.PLAYDATE_SIM_APP);
+  candidates.push(path.join(cfg.sdkPath, 'bin', 'Playdate Simulator.app'));
+  candidates.push('/Applications/Playdate Simulator.app');
+  try {
+    for (const entry of fs.readdirSync(path.join(home, 'Downloads'))) {
+      if (entry.startsWith('PlaydateSDK')) {
+        candidates.push(path.join(home, 'Downloads', entry, 'bin', 'Playdate Simulator.app'));
+      }
+    }
+  } catch { /* no Downloads directory */ }
+  candidates.push(path.join(home, 'Applications', 'Playdate Simulator.app'));
+
+  if (process.env.PLAYDATE_SIM_APP && !isDir(process.env.PLAYDATE_SIM_APP)) {
+    console.warn(`PLAYDATE_SIM_APP is not a directory: ${process.env.PLAYDATE_SIM_APP}`);
+  }
+  cfg.simulatorAppPath = candidates.find(isDir) ||
     path.join(cfg.sdkPath, 'bin', 'Playdate Simulator.app');
   cfg.simulatorPath = path.join(cfg.simulatorAppPath, 'Contents', 'MacOS', 'PlaydateSimulator');
   cfg.pdcPath = path.join(cfg.sdkPath, 'bin', 'pdc');

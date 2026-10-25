@@ -31,6 +31,13 @@ brew install node cliclick
 ```bash
 cd /path/to/PlaydateSDK-3.1.2/webapp
 
+# Tell both the checker and the server where the extracted SDK lives.
+# (If the webapp is inside the SDK, this can be omitted.)
+export PLAYDATE_SDK_PATH="$HOME/PlaydateSDK-3.1.2"
+
+# Only if the .app bundle is outside the SDK:
+# export PLAYDATE_SIM_APP="/Applications/Playdate Simulator.app"
+
 # Run the checker — it verifies tools and prints the manual steps
 bash scripts/setup-macos.sh
 ```
@@ -48,19 +55,16 @@ The script will tell you to:
    - **Accessibility** — required for `cliclick` / `osascript` input.
    - Go to *System Settings → Privacy & Security* and enable **Terminal** (or your terminal app) under both categories.
 
-## Configure the SDK path
+## Persist the SDK path
 
-The server needs to find the SDK. Set it once:
+`PLAYDATE_SDK_PATH` and `PLAYDATE_SIM_APP` are read by **both** `setup-macos.sh`
+and the server. The `export` above only lasts for the current shell; add it to
+`~/.zshrc` (or your launchd plist) so `npm run start` and the setup checker see
+it later:
 
 ```bash
 export PLAYDATE_SDK_PATH="$HOME/PlaydateSDK-3.1.2"
-```
-
-Add that line to `~/.zshrc` so it persists across logins.
-
-If the simulator app is not at `bin/Playdate Simulator.app` inside the SDK, set:
-
-```bash
+# Optional if the simulator app is not at $PLAYDATE_SDK_PATH/bin:
 export PLAYDATE_SIM_APP="/Applications/Playdate Simulator.app"
 ```
 
