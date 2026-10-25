@@ -73,12 +73,26 @@ fi
 
 if [ -n "$APP" ]; then
   printf '  [ok]      %s\n' "$APP"
-  BIN="$APP/Contents/MacOS/PlaydateSimulator"
-  if [ -f "$BIN" ]; then
+  # Current SDK bundles use "Contents/MacOS/Playdate Simulator" (with a
+  # space), not "PlaydateSimulator".  Detect the executable, then fall back to
+  # any executable in Contents/MacOS.
+  MACOS_DIR="$APP/Contents/MacOS"
+  BIN=""
+  for candidate in "$MACOS_DIR/Playdate Simulator" "$MACOS_DIR/PlaydateSimulator"; do
+    if [ -f "$candidate" ]; then BIN="$candidate"; break; fi
+  done
+  if [ -z "$BIN" ]; then
+    shopt -s nullglob
+    for candidate in "$MACOS_DIR"/*; do
+      if [ -f "$candidate" ] && [ -x "$candidate" ]; then BIN="$candidate"; break; fi
+    done
+    shopt -u nullglob
+  fi
+  if [ -n "$BIN" ]; then
     ARCH=$(file "$BIN" | grep -Eo 'arm64|x86_64' | head -1 || true)
-    printf '  [ok]      binary%s\n' "${ARCH:+ ($ARCH)}"
+    printf '  [ok]      %s%s\n' "$BIN" "${ARCH:+ ($ARCH)}"
   else
-    echo "  [MISSING] simulator binary at $BIN"
+    echo "  [MISSING] simulator executable under $MACOS_DIR"
     MISSING=1
   fi
 else

@@ -68,6 +68,15 @@ export PLAYDATE_SDK_PATH="$HOME/PlaydateSDK-3.1.2"
 export PLAYDATE_SIM_APP="/Applications/Playdate Simulator.app"
 ```
 
+### Simulator executable name
+
+The macOS bundle's executable is **`Contents/MacOS/Playdate Simulator`** — the
+space between `Playdate` and `Simulator` is part of the filename (it is not
+`PlaydateSimulator` like the Linux binary). The server auto-detects the actual
+executable inside the selected `.app`, so both current and older bundle layouts
+work. `PLAYDATE_SIM_APP`, if used, must point at the `.app` **bundle**, not at
+the executable.
+
 ## Seed example games (optional)
 
 ```bash

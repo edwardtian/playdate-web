@@ -22,6 +22,9 @@ const { exec, sleep, seedSimulatorConfig, cfg } = require('../platform');
 
 const SIM_APP = cfg.simulatorAppPath;
 const SIM_BINARY = cfg.simulatorPath;
+// System Events uses the executable's name (usually "Playdate Simulator").
+// Derive it from the detected binary so both current and older bundles work.
+const SIM_PROCESS = JSON.stringify(cfg.simulatorProcessName || path.basename(SIM_BINARY));
 
 // On macOS, keyboard: arrows = D-pad, a = B, s = A. Crank: [ = forward, ] = back.
 const KEY_NAME = {
@@ -46,7 +49,7 @@ async function haveCliclick() {
 async function findWindowId(timeoutMs = 25000) {
   const script = `
     tell application "System Events"
-      set procs to every process whose name is "PlaydateSimulator"
+      set procs to every process whose name is ${SIM_PROCESS}
       if (count of procs) is 0 then return ""
       set proc to item 1 of procs
       set wins to every window of proc
@@ -72,7 +75,7 @@ async function findWindowId(timeoutMs = 25000) {
 async function windowGeometry(winId) {
   const script = `
     tell application "System Events"
-      set proc to first process whose name is "PlaydateSimulator"
+      set proc to first process whose name is ${SIM_PROCESS}
       set w to first window of proc whose id is ${winId}
       set pos to position of w
       set sz to size of w
@@ -87,7 +90,7 @@ async function windowGeometry(winId) {
 async function positionWindow(winId, x, y) {
   const script = `
     tell application "System Events"
-      set proc to first process whose name is "PlaydateSimulator"
+      set proc to first process whose name is ${SIM_PROCESS}
       set w to first window of proc whose id is ${winId}
       set position of w to {${x}, ${y}}
     end tell`;
@@ -98,7 +101,7 @@ async function positionWindow(winId, x, y) {
 async function activateWindow(winId) {
   const script = `
     tell application "System Events"
-      set proc to first process whose name is "PlaydateSimulator"
+      set proc to first process whose name is ${SIM_PROCESS}
       set frontmost of proc to true
       try
         set w to first window of proc whose id is ${winId}
@@ -243,9 +246,13 @@ class DarwinSession {
 
   async start() {
     if (!fs.existsSync(SIM_BINARY)) {
+      const appExists = fs.existsSync(SIM_APP);
+      const detail = appExists
+        ? `app bundle found at ${SIM_APP}, but its executable is missing`
+        : `app bundle not found at ${SIM_APP}`;
       throw new Error(
-        `Playdate Simulator.app not found at ${SIM_APP}. ` +
-        `Install the Playdate SDK and set PLAYDATE_SIM_APP if it's elsewhere.`
+        `Playdate Simulator executable not found at ${SIM_BINARY} (${detail}). ` +
+        `Install the Playdate SDK or set PLAYDATE_SIM_APP to the .app bundle.`
       );
     }
     this._cliclick = await haveCliclick();
@@ -287,7 +294,7 @@ class DarwinSession {
       if (action !== 'down') return;
       const script = `
         tell application "System Events"
-          set proc to first process whose name is "PlaydateSimulator"
+          set proc to first process whose name is ${SIM_PROCESS}
           set frontmost of proc to true
           tell application "System Events" to keystroke "${key}"
         end tell`;
@@ -352,7 +359,7 @@ class DarwinSession {
     // Also quit the simulator instance via AppleScript so it doesn't linger.
     const script = `
       tell application "System Events"
-        set procs to every process whose name is "PlaydateSimulator"
+        set procs to every process whose name is ${SIM_PROCESS}
         repeat with p in procs
           try
             tell application "System Events" to keystroke "q" using command down

@@ -91,6 +91,29 @@ if (IS_MAC) {
   const isDir = (p) => {
     try { return fs.statSync(p).isDirectory(); } catch { return false; }
   };
+  const isFile = (p) => {
+    try { return fs.statSync(p).isFile(); } catch { return false; }
+  };
+  // The macOS bundle executable is named "Playdate Simulator" (with a space)
+  // in current SDKs, not "PlaydateSimulator".  Detect it instead of assuming
+  // the Linux-style name; also fall back to any executable in Contents/MacOS.
+  const findSimulatorBinary = (appPath) => {
+    const macosDir = path.join(appPath, 'Contents', 'MacOS');
+    for (const name of ['Playdate Simulator', 'PlaydateSimulator']) {
+      const candidate = path.join(macosDir, name);
+      if (isFile(candidate)) return candidate;
+    }
+    try {
+      for (const entry of fs.readdirSync(macosDir)) {
+        const candidate = path.join(macosDir, entry);
+        try {
+          const st = fs.statSync(candidate);
+          if (st.isFile() && (st.mode & 0o111)) return candidate;
+        } catch { /* skip unreadable entry */ }
+      }
+    } catch { /* no Contents/MacOS */ }
+    return path.join(macosDir, 'Playdate Simulator');
+  };
   const home = os.homedir();
   const candidates = [];
   if (process.env.PLAYDATE_SIM_APP) candidates.push(process.env.PLAYDATE_SIM_APP);
@@ -110,7 +133,8 @@ if (IS_MAC) {
   }
   cfg.simulatorAppPath = candidates.find(isDir) ||
     path.join(cfg.sdkPath, 'bin', 'Playdate Simulator.app');
-  cfg.simulatorPath = path.join(cfg.simulatorAppPath, 'Contents', 'MacOS', 'PlaydateSimulator');
+  cfg.simulatorPath = findSimulatorBinary(cfg.simulatorAppPath);
+  cfg.simulatorProcessName = path.basename(cfg.simulatorPath);
   cfg.pdcPath = path.join(cfg.sdkPath, 'bin', 'pdc');
 } else {
   cfg.xvfbPath = path.join(cfg.vendorX11Dir, 'usr', 'bin', 'Xvfb');

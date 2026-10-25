@@ -75,7 +75,7 @@ npm run seed
 npm run start              # http://127.0.0.1:4173
 ```
 
-If the SDK lives elsewhere, `export PLAYDATE_SDK_PATH=/path/to/SDK` **before** running the setup checker. On macOS, if the simulator app is not at `$PLAYDATE_SDK_PATH/bin/Playdate Simulator.app`, also `export PLAYDATE_SIM_APP=/path/to/Playdate Simulator.app`. On Linux, if the X11 tools live elsewhere, set `X11_VENDOR_DIR`.
+If the SDK lives elsewhere, `export PLAYDATE_SDK_PATH=/path/to/SDK` **before** running the setup checker. On macOS, if the simulator app is not at `$PLAYDATE_SDK_PATH/bin/Playdate Simulator.app`, also `export PLAYDATE_SIM_APP=/path/to/Playdate Simulator.app`. On Linux, if the X11 tools live elsewhere, set `X11_VENDOR_DIR`. The macOS app's executable is `Contents/MacOS/Playdate Simulator` (the space is normal); the server auto-detects it.
 
 Environment knobs:
 
