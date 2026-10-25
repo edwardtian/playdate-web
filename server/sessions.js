@@ -33,6 +33,9 @@ class Session extends EventEmitter {
     this.audioAvailable = false;
     this.audioBytes = 0;
     this.inputChain = Promise.resolve();
+    this.viewerGraceTimer = null;
+    this.unviewedTimer = null;
+    this.everHadViewer = false;
     this.impl = null;
   }
 
@@ -60,8 +63,54 @@ class Session extends EventEmitter {
   }
 
   subscribeAudio(fn) {
+    this.noteViewerAttached();
     this.audioSubscribers.add(fn);
-    return () => this.audioSubscribers.delete(fn);
+    return () => {
+      this.audioSubscribers.delete(fn);
+      this.noteViewerDetached();
+    };
+  }
+
+  // Frame and audio streams are the browser's lifeline to a session.  When
+  // the last one closes, the tab/browser is gone or reloading; stop the
+  // simulator after a short grace period instead of waiting for the 10-minute
+  // idle reaper.  A reconnecting stream cancels the timer.
+  noteViewerAttached() {
+    this.everHadViewer = true;
+    if (this.viewerGraceTimer) {
+      clearTimeout(this.viewerGraceTimer);
+      this.viewerGraceTimer = null;
+    }
+    if (this.unviewedTimer) {
+      clearTimeout(this.unviewedTimer);
+      this.unviewedTimer = null;
+    }
+  }
+
+  armUnviewedTimer() {
+    if (this.everHadViewer || this.unviewedTimer || this.state !== 'running') return;
+    this.unviewedTimer = setTimeout(() => {
+      this.unviewedTimer = null;
+      if (this.state === 'running' && !this.everHadViewer) {
+        this.stop().catch(() => {});
+      }
+    }, cfg.unviewedTimeoutMs);
+    this.unviewedTimer.unref?.();
+  }
+
+  noteViewerDetached() {
+    if (this.state !== 'running') return;
+    if (this.frameSubscribers.size || this.audioSubscribers.size) return;
+    if (this.viewerGraceTimer) return;
+    this.viewerGraceTimer = setTimeout(() => {
+      this.viewerGraceTimer = null;
+      if (this.state === 'running'
+          && !this.frameSubscribers.size
+          && !this.audioSubscribers.size) {
+        this.stop().catch(() => {});
+      }
+    }, cfg.viewerGraceMs);
+    this.viewerGraceTimer.unref?.();
   }
 
   // xdotool commands must be serialized: otherwise a keyup can overtake its
@@ -84,6 +133,7 @@ class Session extends EventEmitter {
       if (this.state !== 'starting') return;
       this.state = 'running';
       this.emit('ready');
+      this.armUnviewedTimer();
     } catch (err) {
       this.fail(err.message);
     }
@@ -150,14 +200,26 @@ class Session extends EventEmitter {
   }
 
   subscribeFrame(fn) {
+    this.noteViewerAttached();
     this.frameSubscribers.add(fn);
     if (this.lastFrame) fn(this.lastFrame);
-    return () => this.frameSubscribers.delete(fn);
+    return () => {
+      this.frameSubscribers.delete(fn);
+      this.noteViewerDetached();
+    };
   }
 
   async stop() {
     if (this.state === 'stopped') return;
     this.state = 'stopped';
+    if (this.viewerGraceTimer) {
+      clearTimeout(this.viewerGraceTimer);
+      this.viewerGraceTimer = null;
+    }
+    if (this.unviewedTimer) {
+      clearTimeout(this.unviewedTimer);
+      this.unviewedTimer = null;
+    }
     try { if (this.impl) await this.impl.stop(); } catch { /* ignore */ }
     this.emit('frameEnd');
     this.frameSubscribers.clear();

@@ -3,60 +3,115 @@
 # Verifies prerequisites and prints the manual steps that require a GUI.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WEBAPP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKSPACE_DIR="$(cd "$WEBAPP_DIR/.." && pwd)"
+
+# Same resolution as server/config.js: explicit env first, then the SDK root.
+SDK_PATH="${PLAYDATE_SDK_PATH:-$WORKSPACE_DIR}"
+SIM_APP_ENV="${PLAYDATE_SIM_APP:-}"
+
 echo "=== Playdate Web Simulator — macOS setup ==="
 echo
 
 MISSING=0
 
 check() {
-  local name="$1" cmd="$2"
+  local name="$1" cmd="$2" hint="${3:-brew install $2}"
   if command -v "$cmd" >/dev/null 2>&1; then
     printf '  [ok]      %s (%s)\n' "$name" "$(command -v "$cmd")"
   else
-    printf '  [MISSING] %s — install with: brew install %s\n' "$name" "$cmd"
+    printf '  [MISSING] %s — %s\n' "$name" "$hint"
     MISSING=1
   fi
 }
 
 echo "1. Required tools"
 check node node
-check osascript osascript
-check screencapture screencapture
-check sips sips
+check osascript osascript "macOS built-in; check your PATH"
+check screencapture screencapture "macOS built-in; check your PATH"
+check sips sips "macOS built-in; check your PATH"
 check cliclick cliclick
 echo
 
-# Locate the simulator app
-APP=""
-for candidate in \
-  "/Applications/Playdate Simulator.app" \
-  "$HOME/Downloads/PlaydateSDK"*/bin/"Playdate Simulator.app" \
-  "$PWD"/bin/"Playdate Simulator.app"; do
-  if [ -d "$candidate" ]; then APP="$candidate"; break; fi
-done
+echo "2. Playdate SDK and Simulator"
+printf '  SDK path: %s\n' "$SDK_PATH"
+if [ ! -d "$SDK_PATH" ]; then
+  echo "  [MISSING] PLAYDATE_SDK_PATH is not a directory: $SDK_PATH"
+  MISSING=1
+fi
 
-echo "2. Playdate Simulator"
+# The same precedence the server uses:
+#   PLAYDATE_SIM_APP > $PLAYDATE_SDK_PATH/bin/Playdate Simulator.app
+# then common install locations.
+APP=""
+if [ -n "$SIM_APP_ENV" ]; then
+  if [ -d "$SIM_APP_ENV" ]; then
+    APP="$SIM_APP_ENV"
+  else
+    echo "  [warn]    PLAYDATE_SIM_APP is not a directory: $SIM_APP_ENV"
+  fi
+fi
+
+if [ -z "$APP" ] && [ -d "$SDK_PATH/bin/Playdate Simulator.app" ]; then
+  APP="$SDK_PATH/bin/Playdate Simulator.app"
+fi
+
+if [ -z "$APP" ] && [ -d "/Applications/Playdate Simulator.app" ]; then
+  APP="/Applications/Playdate Simulator.app"
+fi
+
+if [ -z "$APP" ]; then
+  shopt -s nullglob
+  for candidate in \
+    "$HOME"/Downloads/PlaydateSDK*/bin/"Playdate Simulator.app" \
+    "$HOME"/Applications/"Playdate Simulator.app"; do
+    if [ -d "$candidate" ]; then APP="$candidate"; break; fi
+  done
+  shopt -u nullglob
+fi
+
 if [ -n "$APP" ]; then
   printf '  [ok]      %s\n' "$APP"
   BIN="$APP/Contents/MacOS/PlaydateSimulator"
   if [ -f "$BIN" ]; then
-    ARCH=$(file "$BIN" | grep -o 'arm64\|x86_64' | head -1)
-    printf '  [ok]      binary (%s)\n' "$ARCH"
+    ARCH=$(file "$BIN" | grep -Eo 'arm64|x86_64' | head -1 || true)
+    printf '  [ok]      binary%s\n' "${ARCH:+ ($ARCH)}"
+  else
+    echo "  [MISSING] simulator binary at $BIN"
+    MISSING=1
   fi
 else
   echo "  [MISSING] Playdate Simulator.app"
   echo "            Download the Playdate SDK: https://play.date/dev/"
-  echo "            Then set PLAYDATE_SDK_PATH to the extracted folder."
+  echo "            Checked:"
+  echo "              PLAYDATE_SIM_APP=${SIM_APP_ENV:-<unset>}"
+  echo "              $SDK_PATH/bin/Playdate Simulator.app"
+  echo "              /Applications/Playdate Simulator.app"
+  echo "              ~/Downloads/PlaydateSDK*/bin/Playdate Simulator.app"
+  echo "            Set PLAYDATE_SDK_PATH to the extracted SDK folder (or"
+  echo "            PLAYDATE_SIM_APP directly to the .app bundle)."
   MISSING=1
+fi
+
+if [ -x "$SDK_PATH/bin/pdc" ]; then
+  printf '  [ok]      pdc (%s)\n' "$SDK_PATH/bin/pdc"
+else
+  printf '  [warn]    pdc not found at %s/bin/pdc (only needed for npm run seed)\n' "$SDK_PATH"
 fi
 echo
 
 echo "3. Node version"
-NODE_MAJOR=$(node -e 'console.log(process.versions.node.split(".")[0])')
-if [ "$NODE_MAJOR" -ge 18 ]; then
-  printf '  [ok]      node v%s\n' "$(node -v)"
+if command -v node >/dev/null 2>&1; then
+  NODE_MAJOR=$(node -e 'console.log(process.versions.node.split(".")[0])')
+  if [ "$NODE_MAJOR" -ge 18 ]; then
+    printf '  [ok]      node %s\n' "$(node -v)"
+  else
+    printf '  [MISSING] node >= 18 required (found v%s)\n' "$(node -v)"
+    MISSING=1
+  fi
 else
-  printf '  [MISSING] node >= 18 required (found v%s)\n' "$(node -v)"
+  echo "  [MISSING] node (install with: brew install node)"
   MISSING=1
 fi
 echo

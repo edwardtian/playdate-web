@@ -27,6 +27,19 @@ const cfg = {
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES || 64 * 1024 * 1024),
   maxConcurrentSessions: Number(process.env.MAX_SESSIONS || 3),
   sessionIdleTimeoutMs: Number(process.env.SESSION_IDLE_MS || 10 * 60 * 1000),
+  // When the last frame/audio stream of a viewer disconnects (tab closed,
+  // browser crashed, network dropped), give it a short grace period in case
+  // the client is reconnecting, then stop the session and its child processes.
+  viewerGraceMs: (() => {
+    const n = Number(process.env.SESSION_VIEWER_GRACE_MS ?? 15000);
+    return Number.isFinite(n) && n >= 0 ? n : 15000;
+  })(),
+  // A session for which no frame/audio stream ever connects (for example the
+  // tab was closed while the simulator was starting) is stopped after this.
+  unviewedTimeoutMs: (() => {
+    const n = Number(process.env.SESSION_UNVIEWED_MS ?? 60000);
+    return Number.isFinite(n) && n >= 0 ? n : 60000;
+  })(),
 
   // Display / capture geometry
   // The simulator window is 482x708 at (399,96).  A 900x820 virtual display

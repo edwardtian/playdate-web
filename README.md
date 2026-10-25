@@ -87,6 +87,8 @@ Environment knobs:
 | `MAX_UPLOAD_BYTES` | 64 MiB | Upload cap |
 | `MAX_SESSIONS` | 3 | Concurrent simulator sessions |
 | `SESSION_IDLE_MS` | 10 min | Idle session reaping |
+| `SESSION_VIEWER_GRACE_MS` | 15000 | Grace period after the last frame/audio stream disconnects before the session is stopped |
+| `SESSION_UNVIEWED_MS` | 60000 | Stop a session if no frame/audio stream ever connects (e.g. the tab closed during startup) |
 | `AUDIO_ENABLED` | `1` | Set to `0` to disable session audio streaming |
 | `PLAYDATE_VOLUME` | `200` | System volume seeded into `Disk/System/Data/global.settings` when it is missing or zero |
 
@@ -111,6 +113,7 @@ Then upload `FlippyFish.zip` in the UI. Folder uploads are supported too: the br
 | `GET` | `/api/sessions` | List running sessions |
 | `GET` | `/api/sessions/:id` | Session status |
 | `DELETE` | `/api/sessions/:id` | Stop session |
+| `POST` | `/api/sessions/:id/stop` | Stop session (used by `navigator.sendBeacon` on tab close) |
 | `GET` | `/api/sessions/:id/frames` | MJPEG stream (`multipart/x-mixed-replace`) |
 | `GET` | `/api/sessions/:id/audio` | Live PCM audio stream (`audio/L16;rate=48000;channels=2`; Linux) |
 | `POST` | `/api/sessions/:id/input` | Send input |
@@ -145,7 +148,8 @@ Input payloads:
 
 - Uploads must be zip archives; entries with absolute paths, `..` traversal, or drive letters are rejected before extraction.
 - Each session runs in its own `HOME` directory and its own PulseAudio null sink, seeded with `ShowElist=0` / `ShowPerfWarning=0` so the simulator starts clean.
-- Sessions are isolated on separate virtual X displays and are capped/reaped by idle time.
+- Sessions are isolated on separate virtual X displays. Starting another game stops the previous session; closing/reloading the tab sends a `sendBeacon` stop request, the server stops a session after `SESSION_VIEWER_GRACE_MS` once its last frame/audio stream disconnects, and an unviewed session is stopped after `SESSION_UNVIEWED_MS`. The idle reaper is a final fallback.
+- `SIGINT`/`SIGTERM` on the server gracefully stops all sessions, their simulator/ffmpeg/Xvfb children, and their PulseAudio sinks.
 - Uploaded games are untrusted code executed by the simulator process; run this service in a sandbox/container if you expose it publicly.
 
 ## Layout

@@ -257,7 +257,7 @@ async function handle(req, res) {
     return json(res, 405, { error: 'Method not allowed' });
   }
 
-  const m = pathname.match(/^\/api\/sessions\/([A-Za-z0-9_-]{1,64})(?:\/(frames|input|audio))?$/);
+  const m = pathname.match(/^\/api\/sessions\/([A-Za-z0-9_-]{1,64})(?:\/(frames|input|audio|stop))?$/);
   if (m) {
     const id = m[1];
     const sub = m[2];
@@ -290,6 +290,12 @@ async function handle(req, res) {
     }
     if (sub === 'audio' && req.method === 'GET') {
       return streamAudio(req, res, session);
+    }
+    // navigator.sendBeacon() can only POST.  Used by the pagehide handler so
+    // closing the tab does not leave a simulator running.
+    if (sub === 'stop' && req.method === 'POST') {
+      await session.stop();
+      return json(res, 200, { stopped: true });
     }
     if (sub === 'input' && req.method === 'POST') {
       let payload;
@@ -325,5 +331,19 @@ server.listen(cfg.port, cfg.host, () => {
   console.log(`Playdate Web Simulator running at http://${cfg.host}:${cfg.port}`);
   console.log(`SDK: ${cfg.sdkPath}`);
 });
+
+// On a normal server stop, take the simulator/ffmpeg/Xvfb children and the
+// per-session PulseAudio sinks with us instead of leaving orphans behind.
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}; stopping ${sessions.sessions.size} session(s)…`);
+  await Promise.all([...sessions.sessions.values()].map((s) => s.stop().catch(() => {})));
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+process.on('SIGINT', () => { shutdown('SIGINT'); });
+process.on('SIGTERM', () => { shutdown('SIGTERM'); });
 
 module.exports = server;

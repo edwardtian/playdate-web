@@ -387,6 +387,20 @@ async function stopSession() {
   state.buttonDown.clear();
 }
 
+// Closing/reloading the tab does not always leave time for a normal DELETE.
+// sendBeacon POSTs to an explicit stop route; the server also has a viewer
+// grace timer as a fallback if the beacon is lost.
+window.addEventListener('pagehide', (event) => {
+  if (event.persisted) return; // page may be restored from the back/forward cache
+  const id = state.session?.id;
+  if (!id) return;
+  const url = `/api/sessions/${id}/stop`;
+  try {
+    if (navigator.sendBeacon && navigator.sendBeacon(url)) return;
+  } catch { /* fall through */ }
+  try { fetch(url, { method: 'POST', keepalive: true }); } catch { /* ignore */ }
+});
+
 // ---- Audio ------------------------------------------------------------------
 
 function setSoundButton(label, on) {
